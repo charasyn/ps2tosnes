@@ -8,9 +8,14 @@
 #define S_LATCH 9
 #define S_CLOCK 10
 
+#define REVERSE_BUTTONS
+#define LED
+
+
+
 #define checkLatch (PINB&(1<<(S_LATCH-8)))
 #define checkClock (PINB&(1<<(S_CLOCK-8)))
-inline void writeData(byte x){ if(x) PORTB|=1; else PORTB&=0xfe; }
+inline void writeData(byte x){ if(x) PORTB|=(1<<(S_DATA-8)); else PORTB&=~(1<<(S_DATA-8)); }
 
 inline byte reverse(byte b) { // thanks "sth" from StackOverflow
    b = (b & 0xF0) >> 4 | (b & 0x0F) << 4;
@@ -23,8 +28,10 @@ byte mdata[3];
 byte output[2];
 byte bitout[32];
 byte i;
-byte led;
 signed char x,y;
+#ifdef LED
+byte led;
+#endif
 
 PS2 mouse(P_CLOCK, P_DATA);
 void mouse_init()
@@ -71,7 +78,15 @@ void setup() {
   pinMode(S_LATCH,INPUT_PULLUP);
   pinMode(S_CLOCK,INPUT_PULLUP);
   digitalWrite(S_DATA,LOW);
+  
+  #ifdef LED
   led=0;
+  pinMode(13,OUTPUT);
+  #endif
+  
+  for(i=0;i<16;i++){
+    bitout[i]=1;
+  }
 }
 
 void loop() {
@@ -81,18 +96,28 @@ void loop() {
   y=(signed char)mdata[2];
   output[0]=reverse(~((min(abs(y),0x7f))|((y<0)?0x00:0x80))); //y
   output[1]=reverse(~((min(abs(x),0x7f))|((x<0)?0x80:0x00))); //x
-  
-  for(i=0;i<16;i++){
-    bitout[i]=1;
-  }
-  for(;i<32;i++){
+  for(i=16;i<32;i++){
     bitout[i]=output[(i>>3)&1]&(1<<(i&7));
   }
+  
+  #ifdef REVERSE_BUTTONS
+  bitout[8]=mdata[0]&0x01?0:1;
+  bitout[9]=mdata[0]&0x02?0:1;
+  #else
   bitout[8]=mdata[0]&0x02?0:1;
   bitout[9]=mdata[0]&0x01?0:1;
+  #endif
+  
   bitout[15]=0;
   i=0;
-  if(led){led=0;PORTB&=~(1<<(13-8));}else{led=1;PORTB|=1<<(13-8);}
+  
+  #ifdef LED
+  if (led) {
+    led=0;PORTB&=~(1<<(13-8));
+  } else {
+    led=1;PORTB|=1<<(13-8);
+  }
+  #endif
   
   noInterrupts();
   while(!checkLatch);
